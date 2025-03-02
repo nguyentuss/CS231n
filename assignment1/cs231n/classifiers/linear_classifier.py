@@ -66,8 +66,6 @@ class LinearClassifier(object):
             #########################################################################
             # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
             batch_choose = np.random.choice(num_train, batch_size, replace=False)
-            # if it <= 30: 
-                # print(batch_choose)
             X_batch = X[batch_choose]
             y_batch = y[batch_choose]
 
@@ -78,7 +76,6 @@ class LinearClassifier(object):
             # evaluate loss and gradient
             loss, grad = self.loss(X_batch, y_batch, reg)
             loss_history.append(loss)
-            # print(grad)
 
             # perform parameter update
             #########################################################################

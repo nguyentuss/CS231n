@@ -25,6 +25,8 @@ def softmax_loss_naive(W, X, y, reg):
     # Initialize the loss and gradient to zero.
     loss = 0.0
     dW = np.zeros_like(W)
+    N = X.shape[0]
+    C = W.shape[1]
 
     #############################################################################
     # TODO: Compute the softmax loss and its gradient using explicit loops.     #
@@ -35,7 +37,26 @@ def softmax_loss_naive(W, X, y, reg):
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
     pass
+    Z = X.dot(W)
+    # print(Z.shape)
+    A = np.zeros((N,C))
+    E = np.zeros((N,C))
+    for i in range(N):   
+      sum = 0
+      for c in range(C):
+        sum += np.exp(Z[i,c])
+      for c in range(C):
+        A[i,c] = np.exp(Z[i,c])/sum
+        E[i,c] = A[i,c]
+      E[i,y[i]] -= 1 
+    for i in range(N):
+      loss += np.log(A[i,y[i]])
+    loss = -1/N*loss
+    # print(Z[2])
+    # print(A[2])
 
+    dW = X.T.dot(E)
+    dW /= N
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
     return loss, dW
@@ -50,7 +71,8 @@ def softmax_loss_vectorized(W, X, y, reg):
     # Initialize the loss and gradient to zero.
     loss = 0.0
     dW = np.zeros_like(W)
-
+    N = X.shape[0]
+    C = W.shape[1]
     #############################################################################
     # TODO: Compute the softmax loss and its gradient using no explicit loops.  #
     # Store the loss in loss and the gradient in dW. If you are not careful     #
@@ -58,6 +80,23 @@ def softmax_loss_vectorized(W, X, y, reg):
     # regularization!                                                           #
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    Z = X.dot(W)
+    # print(Z.shape)
+    A = np.zeros((N,C))
+    E = np.zeros((N,C))
+
+    Z = np.exp(Z)
+    E_sum = np.sum(Z,axis=1)
+    E_sum = np.broadcast_to(E_sum[:,None], (N,C))
+    # print(E_sum)
+    A = Z/E_sum
+
+    y_one_hot = np.zeros((N,C))
+    y_one_hot[np.arange(N),y] = 1
+    E = A - y_one_hot
+    loss = np.sum(np.log(A[np.arange(N),y]))
+    loss = -1/N*loss
+    dW = (1/N)*(X.T.dot(E))
 
     pass
 

@@ -111,7 +111,7 @@ def grad_check_sparse(f, x, analytic_grad, num_checks=10, h=1e-5):
     sample a few random elements and only return numerical
     in this dimensions.
     """
-
+    print(x.shape)
     for i in range(num_checks):
         ix = tuple([randrange(m) for m in x.shape])
         oldval = x[ix]
@@ -121,9 +121,10 @@ def grad_check_sparse(f, x, analytic_grad, num_checks=10, h=1e-5):
         x[ix] = oldval - h  # increment by h
         fxmh = f(x)  # evaluate f(x - h)
         x[ix] = oldval  # reset
-
+        # print(x[ix].shape)
         grad_numerical = (fxph - fxmh) / (2 * h)
         grad_analytic = analytic_grad[ix]
+        # print(analytic_grad.shape)
         rel_error = abs(grad_numerical - grad_analytic) / (
             abs(grad_numerical) + abs(grad_analytic)
         )
