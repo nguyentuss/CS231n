@@ -54,7 +54,15 @@ class TwoLayerNet(object):
         # weights and biases using the keys 'W2' and 'b2'.                         #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+        # D x H
+        self.params['W1'] = np.random.normal(0.0,weight_scale,(input_dim,hidden_dim))
+        # 1 x H
+        self.params['b1'] = np.zeros((1,hidden_dim))
+        # H x C
+        self.params['W2'] = np.random.normal(0.0,weight_scale,(hidden_dim,num_classes))
+        # 1 x C
+        self.params['b2'] = np.zeros((1,num_classes))
+        
         pass
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -87,7 +95,16 @@ class TwoLayerNet(object):
         # class scores for X and storing them in the scores variable.              #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+        
+        W1 = self.params['W1']
+        b1 = self.params['b1']
+        W2 = self.params['W2']
+        b2 = self.params['b2']
 
+        out1, cache1 = affine_forward(X, W1, b1) # N x H
+        out2, cache2 = relu_forward(out1) # N x H
+        out3 , cache3 = affine_forward(out2, W2, b2) # N x C
+        scores = out3
         pass
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -111,6 +128,18 @@ class TwoLayerNet(object):
         # of 0.5 to simplify the expression for the gradient.                      #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+
+        # print(hidden_layer_1.shape)
+        loss, dscores = softmax_loss(scores,y)
+        
+        loss += 0.5 * self.reg * (np.sum(W1**2)
+                             +np.sum(W2**2))
+        dout3,dW3,db3 = affine_backward(dscores,cache3)
+        dout2 = relu_backward(dout3,cache2)
+        doub1,dW1,db1 = affine_backward(dout2,cache1)
+        dW1 += self.reg * W1
+        dW3 += self.reg * W2
+        grads = {'W1':dW1,'b1':db1,'W2':dW3,'b2':db3}
 
         pass
 
