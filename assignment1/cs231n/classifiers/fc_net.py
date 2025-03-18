@@ -136,7 +136,7 @@ class TwoLayerNet(object):
                              +np.sum(W2**2))
         dout3,dW3,db3 = affine_backward(dscores,cache3)
         dout2 = relu_backward(dout3,cache2)
-        doub1,dW1,db1 = affine_backward(dout2,cache1)
+        _,dW1,db1 = affine_backward(dout2,cache1)
         dW1 += self.reg * W1
         dW3 += self.reg * W2
         grads = {'W1':dW1,'b1':db1,'W2':dW3,'b2':db3}
