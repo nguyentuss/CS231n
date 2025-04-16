@@ -73,7 +73,22 @@ class FullyConnectedNet(object):
         # parameters should be initialized to zeros.                               #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+        dims = [input_dim] + hidden_dims + [num_classes]
 
+        for i in range(self.num_layers):
+            w = f"W{i+1}"
+            b = f"b{i+1}"
+
+            self.params[w] = np.random.normal(loc=0, scale=weight_scale, size=(dims[i],dims[i+1]))
+            self.params[b] = np.zeros(dims[i])
+
+            if (self.normalization == "batchnorm" or self.normalization == "layernorm") and i < self.num_layers - 1:
+                gamma = f"gamma{i+1}"
+                beta = f"beta{i+1}"
+
+                self.params[gamma] = np.ones(dims[i+1])
+                self.params[beta] = np.zeros(dims[i+1])
+            
         pass
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -147,6 +162,45 @@ class FullyConnectedNet(object):
         # layer, etc.                                                              #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+        N = X.shape[0]
+        x = X.reshape((N , -1))
+        layer_input = x
+        caches = []
+        if mode == "train":
+            for layer in range(1, self.num_layers):
+                layer_caches = {}
+                # Compute the Block
+                w = f"W{layer}"
+                b = f"b{layer}"
+                out, affine_cache = affine_forward(layer_input, self.params[w], self.params[b])
+                layer_caches.append(affine_cache)
+                if self.normalization == "batchnorm":
+                    gamma = f"gamma{layer}"
+                    beta = f"beta{layer}"
+                    out, norm_cache = batchnorm_forward(out, self.params[gamma], self.params[beta], self.bn_params)
+                    layer_caches.append(norm_cache)
+                elif self.normalization == "layernorm":
+                    gamma = f"gamma{layer}"
+                    beta = f"beta{layer}"
+                    out, layer_cache = layernorm_forward(out, self.params[gamma], self.params[beta], self.bn_params)
+                    layer_caches.append(layer_cache)
+                out, relu_cache = relu_forward(out)
+                layer_caches.append(relu_cache)
+                if self.use_dropout is True:
+                    out, dropout_cache = dropout_forward(x, self.dropout_param)
+                    layer_caches.append(dropout_cache)
+                # Store all caches for this layer
+                caches.append(layer_caches)
+
+                # Update
+                layer_input = out 
+
+            # Final output layer
+            w = f"W{self.num_layers}"
+            b = f"b{self.num_layers}"
+            scores, final_cache = affine_forward(layer_input, self.params[w], self.params[b])
+            caches.append([final_cache])
+
 
         pass
 
@@ -174,7 +228,7 @@ class FullyConnectedNet(object):
         # of 0.5 to simplify the expression for the gradient.                      #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+        
         pass
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****

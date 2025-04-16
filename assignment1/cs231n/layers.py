@@ -69,9 +69,7 @@ def affine_backward(dout, cache):
     dx = dout.dot(w.T)
     dw = X.T.dot(dout)
     db = np.sum(dout ,axis=0)
-    # print(dx.shape, dw.shape , db.shape)
     dx = dx.reshape(l)
-    # print(dx.shape)
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -206,6 +204,27 @@ def batchnorm_forward(x, gamma, beta, bn_param):
         # might prove to be helpful.                                          #
         #######################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+        
+        # Calculate the mean of each features
+        sample_mean = np.mean(x, axis=0)
+
+        # Subtract mean from each features
+        x_centered = x - sample_mean
+
+        # Calculate the variance of each features
+        sample_var = np.mean(x_centered ** 2, axis=0)
+        std = np.sqrt(sample_var + eps)
+        x_normalized = x_centered / std
+
+        # Scale and shift the normalized
+        out = gamma * x_normalized + beta
+
+        # Update running mean and variance
+        running_mean = momentum * running_mean + (1 - momentum) * sample_mean
+        running_var = momentum * running_var + (1 - momentum) * sample_var
+
+        # Store values
+        cache = (x, x_centered, std, x_normalized, gamma, beta, sample_mean, sample_var, eps)
 
         pass
 
@@ -221,7 +240,8 @@ def batchnorm_forward(x, gamma, beta, bn_param):
         # Store the result in the out variable.                               #
         #######################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+        x_normalized = (x - running_mean)/(np.sqrt(running_var + eps))
+        out = gamma * x_normalized + beta 
         pass
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -263,6 +283,18 @@ def batchnorm_backward(dout, cache):
     # might prove to be helpful.                                              #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    x, x_centered, std, x_normalized, gamma, beta, mean, var, eps = cache
+    N = x.shape[0]
+    dgamma = np.sum(dout * x_normalized, axis=0)
+    dbeta = np.sum(dout, axis=0)
+    
+    # Gradient for normalized x
+    dx_normalized = dout * gamma
+    
+    dvar = np.sum(dx_normalized * x_centered * (-1 / 2) * (std ** -3), axis=0)
+    dmean = np.sum(-dx_normalized / std, axis=0) + dvar * np.sum(-2 * x_centered,axis=0) / N
+    
+    dx = dx_normalized / std + dvar * 2 * x_centered / N + dmean / N
 
     pass
 
@@ -298,7 +330,6 @@ def batchnorm_backward_alt(dout, cache):
     # single statement; our implementation fits on a single 80-character line.#
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -343,8 +374,21 @@ def layernorm_forward(x, gamma, beta, ln_param):
     # transformations you could perform, that would enable you to copy over   #
     # the batch norm code and leave it almost unchanged?                      #
     ###########################################################################
-    # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****   
+    mean = np.mean(x, axis=1,keepdims=True)
+    x_centered = x - mean
+    var = np.mean(x_centered ** 2, axis=1,keepdims=True)
 
+    std = np.sqrt(var + eps)
+
+    # Normalize
+    x_normalized = x_centered / std
+
+    # Scale and shift
+    out = gamma * x_normalized + beta
+
+    # Store cache
+    cache = (x, x_centered, std, x_normalized, gamma, beta, mean, var, eps)
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -379,6 +423,19 @@ def layernorm_backward(dout, cache):
     # still apply!                                                            #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    x, x_centered, std, x_normalized, gamma, beta, mean, var , eps = cache
+    N, D = x.shape
+    dgamma = np.sum(dout * x_normalized,axis=0)
+    dbeta = np.sum(dout, axis=0)
+
+    # Gradient for normalized x
+    dx_normalized = dout * gamma
+
+    # Layer norm normalizes across the features
+    dvar = np.sum(dx_normalized * x_centered * -0.5 * (std ** -3), axis=1, keepdims=True)
+    dmean = np.sum(-dx_normalized / std, axis=1, keepdims=True) + dvar * np.sum(-2.*x_centered,axis=1, keepdims=True) / D
+
+    dx = dx_normalized / std + dvar * 2 * x/x_centered / D + dmean / D
 
     pass
 
@@ -428,9 +485,14 @@ def dropout_forward(x, dropout_param):
         # Store the dropout mask in the mask variable.                        #
         #######################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+        # Generate a binary mask
+        mask = (np.random.rand(*x.shape)<p)/p # *x.shape mean unpack the shape
+        
+        # Apply the mask to the input
+        out = x * mask
         pass
 
+        # 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         #######################################################################
         #                           END OF YOUR CODE                          #
@@ -440,7 +502,7 @@ def dropout_forward(x, dropout_param):
         # TODO: Implement the test phase forward pass for inverted dropout.   #
         #######################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+        out = x
         pass
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -472,6 +534,7 @@ def dropout_backward(dout, cache):
         #######################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+        
         pass
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****

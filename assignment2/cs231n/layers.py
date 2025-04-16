@@ -25,6 +25,10 @@ def affine_forward(x, w, b):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+    N = x.shape[0]
+    X = np.reshape(X, (N , -1))
+    out = x @ w + b
+
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -56,6 +60,13 @@ def affine_backward(dout, cache):
     # TODO: Copy over your solution from Assignment 1.                        #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    l = x.shape
+
+    X = np.reshape(x , (x.shape[0],-1))
+    dx = dout.dot(w.T)
+    dw = X.T.dot(dout)
+    db = np.sum(dout ,axis=0)
+    dx = dx.reshape(l)
 
     pass
 
@@ -81,7 +92,7 @@ def relu_forward(x):
     # TODO: Copy over your solution from Assignment 1.                        #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+    out = np.maximum(0, x)
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -107,7 +118,7 @@ def relu_backward(dout, cache):
     # TODO: Copy over your solution from Assignment 1.                        #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+    dx = dout * (x > 0)
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -136,7 +147,19 @@ def softmax_loss(x, y):
     # TODO: Copy over your solution from Assignment 1.                        #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+    N = x.shape[0]
+    C = x.shape[1]
+    Z = np.exp(x-np.max(x,axis=1,keepdims=True))
+    Z_sum = np.sum(Z,axis=1,keepdims=True) 
+    Z_sum = np.broadcast_to(Z_sum,x.shape)
+    esp = 1e-12
+    Z_sum = np.clip(Z_sum,esp,None)
+    A = Z/Z_sum
+    A = np.clip(A,esp,1.0)
+    loss = -np.sum(np.log(A[np.arange(N),y]))/N
+    dx = A
+    dx[np.arange(N),y] -= 1
+    dx /= N
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -215,7 +238,7 @@ def batchnorm_forward(x, gamma, beta, bn_param):
         # might prove to be helpful.                                          #
         #######################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+      
         pass
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
