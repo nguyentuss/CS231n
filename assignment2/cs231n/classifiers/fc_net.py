@@ -168,7 +168,7 @@ class FullyConnectedNet(object):
         caches = []
         if mode == "train":
             for layer in range(1, self.num_layers):
-                layer_caches = {}
+                layer_caches = []
                 # Compute the Block
                 w = f"W{layer}"
                 b = f"b{layer}"
@@ -228,7 +228,50 @@ class FullyConnectedNet(object):
         # of 0.5 to simplify the expression for the gradient.                      #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+        # Compute the loss first
+        loss, dscores = softmax_loss(scores, y)
+
+        # Add regularization to the loss
+        for i in range(self.num_layers):
+            w = f"W{i+1}"
+            loss += 0.5 * self.reg * np.sum(self.params[w] * self.params[w])
+        # Backpropagation
+
+        dout, grads[f"W{self.num_layers}"], grads[f"b{self.num_layers}"] = affine_backward(dscores, caches[self.num_layers-1])
+        grads[f"W{self.num_layers}"] += self.reg * np.sum(self.params[f"W{self.num_layers}"])
+
+        for layer in range(self.num_layers, 0, -1):
+            layer_cache = caches[layer-1]
+            M = len(layer_cache)
+            cache_idx = 0
+
+            # Dropout backward (Optional)
+            if self.use_dropout:
+                dropout_cache = layer_cache[M - 1]
+                dout = dropout_backward(dout, layer_cache)
+                cache_idx += 1
+            
+            # Relu backward 
+            relu_cache = layer_cache[M - 1 - cache_idx]
+            cache_idx += 1
+            dout = relu_backward(dout, relu_cache)
+
+            # Batch/Layer Norm (Optional)
+            if self.normalization == "batchnorm":
+                batchnorm_cache = layer_cache[M - 1 - cache_idx]
+                cache_idx += 1
+                dout = batchnorm_backward(dout, batchnorm_cache)
+            elif self.normalization == "layernorm":
+                layernorm_cache = layer_cache[M - 1 - cache_idx]
+                cache_idx += 1
+                dout = layernorm_backward(dout, layernorm_cache)
+            
+            # Affine backward
+            affine_cache = layer_cache[0]
+            w = f"W{layer}"
+
         
+
         pass
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
