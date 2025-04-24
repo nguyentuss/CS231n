@@ -80,7 +80,7 @@ class FullyConnectedNet(object):
             b = f"b{i+1}"
 
             self.params[w] = np.random.normal(loc=0, scale=weight_scale, size=(dims[i],dims[i+1]))
-            self.params[b] = np.zeros(dims[i])
+            self.params[b] = np.zeros(dims[i+1])
 
             if (self.normalization == "batchnorm" or self.normalization == "layernorm") and i < self.num_layers - 1:
                 gamma = f"gamma{i+1}"
@@ -164,43 +164,49 @@ class FullyConnectedNet(object):
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         N = X.shape[0]
         x = X.reshape((N , -1))
+        # print(x.shape)
         layer_input = x
         caches = []
-        if mode == "train":
-            for layer in range(1, self.num_layers):
-                layer_caches = []
-                # Compute the Block
-                w = f"W{layer}"
-                b = f"b{layer}"
-                out, affine_cache = affine_forward(layer_input, self.params[w], self.params[b])
+        for layer in range(1, self.num_layers):
+            layer_caches = []
+            # Compute the Block
+            w = f"W{layer}"
+            b = f"b{layer}"
+            # print(f"{layer}:{layer_input.shape},{self.params[w].shape},{self.params[b].shape}")
+            out, affine_cache = affine_forward(layer_input, self.params[w], self.params[b])
+            if mode == "train":
                 layer_caches.append(affine_cache)
-                if self.normalization == "batchnorm":
-                    gamma = f"gamma{layer}"
-                    beta = f"beta{layer}"
-                    out, norm_cache = batchnorm_forward(out, self.params[gamma], self.params[beta], self.bn_params)
+            if self.normalization == "batchnorm":
+                gamma = f"gamma{layer}"
+                beta = f"beta{layer}"
+                out, norm_cache = batchnorm_forward(out, self.params[gamma], self.params[beta], self.bn_params)
+                if mode == "train":
                     layer_caches.append(norm_cache)
-                elif self.normalization == "layernorm":
-                    gamma = f"gamma{layer}"
-                    beta = f"beta{layer}"
-                    out, layer_cache = layernorm_forward(out, self.params[gamma], self.params[beta], self.bn_params)
+            elif self.normalization == "layernorm":
+                gamma = f"gamma{layer}"
+                beta = f"beta{layer}"
+                out, layer_cache = layernorm_forward(out, self.params[gamma], self.params[beta], self.bn_params)
+                if mode == "train":
                     layer_caches.append(layer_cache)
-                out, relu_cache = relu_forward(out)
+            out, relu_cache = relu_forward(out)
+            if mode == "train":
                 layer_caches.append(relu_cache)
-                if self.use_dropout is True:
-                    out, dropout_cache = dropout_forward(x, self.dropout_param)
+            if self.use_dropout is True:
+                out, dropout_cache = dropout_forward(out, self.dropout_param)
+                if mode == "train":
                     layer_caches.append(dropout_cache)
+            if mode == "train":
                 # Store all caches for this layer
-                caches.append(layer_caches)
+                caches.append(layer_caches) 
+            # Update
+            layer_input = out 
 
-                # Update
-                layer_input = out 
-
-            # Final output layer
-            w = f"W{self.num_layers}"
-            b = f"b{self.num_layers}"
-            scores, final_cache = affine_forward(layer_input, self.params[w], self.params[b])
-            caches.append([final_cache])
-
+        # Final output layer
+        w = f"W{self.num_layers}"
+        b = f"b{self.num_layers}"
+        scores, final_cache = affine_forward(layer_input, self.params[w], self.params[b])
+        if mode == "train":
+            caches.append(final_cache)
 
         pass
 
@@ -208,11 +214,10 @@ class FullyConnectedNet(object):
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
-
         # If test mode return early.
         if mode == "test":
             return scores
-
+        
         loss, grads = 0.0, {}
         ############################################################################
         # TODO: Implement the backward pass for the fully connected net. Store the #
@@ -236,19 +241,18 @@ class FullyConnectedNet(object):
             w = f"W{i+1}"
             loss += 0.5 * self.reg * np.sum(self.params[w] * self.params[w])
         # Backpropagation
-
+        
         dout, grads[f"W{self.num_layers}"], grads[f"b{self.num_layers}"] = affine_backward(dscores, caches[self.num_layers-1])
-        grads[f"W{self.num_layers}"] += self.reg * np.sum(self.params[f"W{self.num_layers}"])
-
-        for layer in range(self.num_layers, 0, -1):
+        grads[f"W{self.num_layers}"] += self.reg * self.params[f"W{self.num_layers}"]
+        for layer in range(self.num_layers-1, 0, -1):
             layer_cache = caches[layer-1]
             M = len(layer_cache)
             cache_idx = 0
 
             # Dropout backward (Optional)
-            if self.use_dropout:
+            if self.use_dropout is True:
                 dropout_cache = layer_cache[M - 1]
-                dout = dropout_backward(dout, layer_cache)
+                dout = dropout_backward(dout, dropout_cache)
                 cache_idx += 1
             
             # Relu backward 
@@ -269,8 +273,12 @@ class FullyConnectedNet(object):
             # Affine backward
             affine_cache = layer_cache[0]
             w = f"W{layer}"
+            b = f"b{layer}"
 
-        
+            dout, grads[w], grads[b] = affine_backward(dout, affine_cache)
+            # print(grads[w])
+            grads[w] += self.reg * self.params[w]
+            
 
         pass
 
