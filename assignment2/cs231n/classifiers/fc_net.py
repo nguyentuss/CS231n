@@ -179,13 +179,13 @@ class FullyConnectedNet(object):
             if self.normalization == "batchnorm":
                 gamma = f"gamma{layer}"
                 beta = f"beta{layer}"
-                out, norm_cache = batchnorm_forward(out, self.params[gamma], self.params[beta], self.bn_params)
+                out, norm_cache = batchnorm_forward(out, self.params[gamma], self.params[beta], self.bn_params[layer-1])
                 if mode == "train":
                     layer_caches.append(norm_cache)
             elif self.normalization == "layernorm":
                 gamma = f"gamma{layer}"
                 beta = f"beta{layer}"
-                out, layer_cache = layernorm_forward(out, self.params[gamma], self.params[beta], self.bn_params)
+                out, layer_cache = layernorm_forward(out, self.params[gamma], self.params[beta], self.bn_params[layer-1])
                 if mode == "train":
                     layer_caches.append(layer_cache)
             out, relu_cache = relu_forward(out)
@@ -264,11 +264,21 @@ class FullyConnectedNet(object):
             if self.normalization == "batchnorm":
                 batchnorm_cache = layer_cache[M - 1 - cache_idx]
                 cache_idx += 1
-                dout = batchnorm_backward(dout, batchnorm_cache)
+                dx, dgamma, dbeta = batchnorm_backward(dout, batchnorm_cache)
+                dout = dx
+                gamma_name = f"gamma{layer}"
+                beta_name = f"beta{layer}"
+                grads[gamma_name] = dgamma
+                grads[beta_name] = dbeta
             elif self.normalization == "layernorm":
                 layernorm_cache = layer_cache[M - 1 - cache_idx]
                 cache_idx += 1
-                dout = layernorm_backward(dout, layernorm_cache)
+                dx, dgamma, dbeta = layernorm_backward(dout, layernorm_cache)
+                dout = dx
+                gamma_name = f"gamma{layer}" 
+                beta_name = f"beta{layer}"
+                grads[gamma_name] = dgamma
+                grads[beta_name] = dbeta
             
             # Affine backward
             affine_cache = layer_cache[0]

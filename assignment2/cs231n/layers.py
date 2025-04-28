@@ -364,7 +364,23 @@ def batchnorm_backward_alt(dout, cache):
     # single statement; our implementation fits on a single 80-character line.#
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+    
+    x, x_centered, std, x_normalized, gamma, beta, mean, var, eps = cache
+    N = x.shape[0]
+    
+    # Same as in the regular backward pass
+    dgamma = np.sum(dout * x_normalized, axis=0)
+    dbeta = np.sum(dout, axis=0)
+    
+    # More efficient implementation - combines multiple steps into a single expression
+    dx_norm = dout * gamma
+    # This formula directly computes dx without explicitly calculating intermediate values
+    dx = (1.0 / N) * (1.0 / std) * (
+        N * dx_norm
+        - np.sum(dx_norm, axis=0)
+        - x_normalized * np.sum(dx_norm * x_normalized, axis=0)
+    )
+    
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -466,11 +482,14 @@ def layernorm_backward(dout, cache):
     # Gradient for normalized x
     dx_normalized = dout * gamma
 
+    dgamma = np.sum(dout * x_normalized, axis=0)
+    dbeta = np.sum(dout, axis=0)
+    
     # Layer norm normalizes across the features
     dvar = np.sum(dx_normalized * x_centered * -0.5 * (std ** -3), axis=1, keepdims=True)
     dmean = np.sum(-dx_normalized / std, axis=1, keepdims=True) + dvar * np.sum(-2.*x_centered,axis=1, keepdims=True) / D
 
-    dx = dx_normalized / std + dvar * 2 * x/x_centered / D + dmean / D
+    dx = dx_normalized / std + dvar * 2 * x_centered / D + dmean / D
 
     pass
 
