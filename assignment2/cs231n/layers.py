@@ -540,8 +540,8 @@ def dropout_forward(x, dropout_param):
         #######################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         # Generate a binary mask
-        mask = (np.random.rand(*x.shape)<p)/p # *x.shape mean unpack the shape
-        
+        mask = (np.random.rand(*x.shape) < (1 - p)) / (1 - p) # *x.shape mean unpack the shape
+  
         # Apply the mask to the input
         out = x * mask
         pass
