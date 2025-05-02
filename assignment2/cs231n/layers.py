@@ -465,7 +465,7 @@ def layernorm_backward(dout, cache):
     - dgamma: Gradient with respect to scale parameter gamma, of shape (D,)
     - dbeta: Gradient with respect to shift parameter beta, of shape (D,)
     """
-    dx, dgamma, dbeta = None, None, None
+    dx, dgamma, dbeta = None, None
     ###########################################################################
     # TODO: Implement the backward pass for layer norm.                       #
     #                                                                         #
@@ -633,6 +633,37 @@ def conv_forward_naive(x, w, b, conv_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+    N, C, H, W = x.shape
+    F, _, HH, WW = w.shape
+
+    stride = conv_param['stride']
+    pad = conv_param['pad']
+
+    # Convert output dimensions to integers to avoid TypeError when indexing
+    H_out = int(1 + (H + 2 * pad - HH) // stride)
+    W_out = int(1 + (W + 2 * pad - WW) // stride)
+
+    # Initialize output
+    out = np.zeros((N, F, H_out, W_out))
+    
+    # Pad the input
+    x_padded = np.pad(x, ((0, 0), (0, 0), (pad, pad), (pad, pad)), mode='constant')
+    
+    for n in range(N):
+      for f in range(F):
+          for h_out in range(H_out):
+              for w_out in range(W_out):
+                  h_start = h_out * stride
+                  h_end = h_start + HH
+                  w_start = w_out * stride
+                  w_end = w_start + WW
+
+                  # Extract the current slice
+                  x_slice = x_padded[n, :, h_start:h_end, w_start:w_end]
+                  
+                  # Perform convolution
+                  out[n, f, h_out, w_out] = np.sum(x_slice * w[f]) + b[f]
+
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -660,7 +691,57 @@ def conv_backward_naive(dout, cache):
     # TODO: Implement the convolutional backward pass.                        #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    
+    # Get the cached values
+    x, w, b, conv_param = cache
+    
+    # Get dimensions
+    N, C, H, W = x.shape
+    F, _, HH, WW = w.shape
+    _, _, H_out, W_out = dout.shape
+    
+    # Get convolution parameters
+    stride = conv_param['stride']
+    pad = conv_param['pad']
+    
+    # Initialize gradients
+    dx = np.zeros_like(x)
+    dw = np.zeros_like(w)
+    db = np.zeros_like(b)
 
+
+    # Pad the input
+    x_padded = np.pad(x, ((0, 0), (0, 0), (pad, pad), (pad, pad)), mode='constant')
+    dx_padded = np.zeros_like(x_padded)
+
+    # print(x_padded[0, 0, : , :])
+    
+    # Compute db: sum over all dimensions except F
+    db = np.sum(dout, axis=(0, 2, 3))
+    
+    # Compute dw and dx
+    for n in range(N):
+        for f in range(F):
+            for h_out in range(H_out):
+                for w_out in range(W_out):
+                    # Calculate the position in the padded input
+                    h_start = h_out * stride
+                    h_end = h_start + HH
+                    w_start = w_out * stride
+                    w_end = w_start + WW
+                    
+                    # Get the current region
+                    x_slice = x_padded[n, :, h_start:h_end, w_start:w_end]
+
+                    # Update dw: accumulate the gradient from this example
+                    dw[f] += x_slice * dout[n, f, h_out, w_out]
+                    
+                    # Update dx_padded
+                    dx_padded[n, :, h_start:h_end, w_start:w_end] += w[f] * dout[n, f, h_out, w_out]
+    
+    # Remove padding from dx_padded to get dx
+    dx = dx_padded[:, :, pad:pad+H, pad:pad+W]
+    
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -696,6 +777,30 @@ def max_pool_forward_naive(x, pool_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+    N, C, H, W = x.shape
+
+    pool_height = pool_param['pool_height']
+    pool_width = pool_param['pool_width']
+    stride = pool_param['stride']
+
+    H_out = int(1 + (H - pool_height) // stride)
+    W_out = int(1 + (W - pool_width) // stride)
+
+    # Initialize output
+    out = np.zeros((N, C, H_out, W_out))
+
+    for n in range(N):
+      for c in range(C):
+        for h_out in range(H_out):
+          for w_out in range(W_out):
+            # Calculate range
+                 
+            h_start = h_out * stride
+            h_end = h_start + pool_height
+            w_start = w_out * stride
+            w_end = w_start + pool_width
+            out[n, c, h_out, w_out] = np.max(x[n, c, h_start:h_end, w_start:w_end])
+    
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -721,7 +826,48 @@ def max_pool_backward_naive(dout, cache):
     # TODO: Implement the max-pooling backward pass                           #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+    
+    # Get the cached values
+    x, pool_param = cache
+    
+    # Extract pool parameters
+    pool_height = pool_param['pool_height']
+    pool_width = pool_param['pool_width']
+    stride = pool_param['stride']
+    
+    # Get dimensions
+    N, C, H, W = x.shape
+    H_out = 1 + (H - pool_height) // stride
+    W_out = 1 + (W - pool_width) // stride
+    
+    # Initialize gradient with respect to x
+    dx = np.zeros_like(x)
+    
+    # Loop over all data points in the batch
+    for n in range(N):
+        # Loop over all channels
+        for c in range(C):
+            # Loop over all vertical blocks
+            for h_out in range(H_out):
+                # Loop over all horizontal blocks
+                for w_out in range(W_out):
+                    # Compute indices of the pooling region
+                    h_start = h_out * stride
+                    h_end = h_start + pool_height
+                    w_start = w_out * stride
+                    w_end = w_start + pool_width
+                    
+                    # Extract the current pooling region
+                    pool_region = x[n, c, h_start:h_end, w_start:w_end]
+                    
+                    # Find the index of the maximum value in the pooling region
+                    # We need to find which element was the max during the forward pass
+                    mask = (pool_region == np.max(pool_region))
+                    
+                    # Distribute the gradient from dout to the element that had the maximum value
+                    # This is because max pooling only propagates the gradient to the max element
+                    dx[n, c, h_start:h_end, w_start:w_end] += mask * dout[n, c, h_out, w_out]
+    
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -763,6 +909,17 @@ def spatial_batchnorm_forward(x, gamma, beta, bn_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+    N, C, H, W = x.shape
+    
+    # Reshape x to use batchnorm correctly: (N*H*W, C)
+    x_reshaped = x.transpose(0, 2, 3, 1).reshape(-1, C)
+
+    # Apply batch normalization
+    out_reshaped, cache = batchnorm_forward(x_reshaped, gamma, beta, bn_param)
+
+    # Reshape output back to original shape
+    out = out_reshaped.reshape(N, H, W, C).transpose(0, 3, 1, 2)
+
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -785,7 +942,7 @@ def spatial_batchnorm_backward(dout, cache):
     - dgamma: Gradient with respect to scale parameter, of shape (C,)
     - dbeta: Gradient with respect to shift parameter, of shape (C,)
     """
-    dx, dgamma, dbeta = None, None, None
+    dx, dgamma, dbeta = None, None
 
     ###########################################################################
     # TODO: Implement the backward pass for spatial batch normalization.      #
@@ -795,6 +952,17 @@ def spatial_batchnorm_backward(dout, cache):
     # Your implementation should be very short; ours is less than five lines. #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+
+    N, C, H, W = dout.shape
+
+    # Reshape dout to match the shape used in forward pass: (N*H*W, C)
+    dout_reshaped = dout.transpose(0, 2, 3, 1).reshape(-1, C)
+
+    # Apply backward pass of batch normalization
+    dx_reshaped, dgamma, dbeta = batchnorm_backward(dout_reshaped, cache)
+
+    # Reshape dx back to the input shape
+    dx = dx_reshaped.reshape(N, H, W, C).transpose(0, 3, 1, 2)
 
     pass
 
@@ -826,6 +994,7 @@ def spatial_groupnorm_forward(x, gamma, beta, G, gn_param):
     - out: Output data, of shape (N, C, H, W)
     - cache: Values needed for the backward pass
     """
+    N, C, H, W = x.shape
     out, cache = None, None
     eps = gn_param.get("eps", 1e-5)
     ###########################################################################
@@ -836,6 +1005,24 @@ def spatial_groupnorm_forward(x, gamma, beta, G, gn_param):
     # and layer normalization!                                                #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+
+    # Reshape x to separate group for each n point
+    x_reshaped = x.reshape((N, G, C//G, H, W))
+
+    # Compute mean and var
+    mean = np.mean(x_reshaped, axis=(2,3,4), keepdims=True)
+    var = np.var(x_reshaped, axis=(2,3,4), keepdims=True)
+
+    # Normalize
+    x_normalize = (x_reshaped-mean) / np.sqrt(var + eps)
+
+    # Reshape back to original shape
+    x_normalize = x_normalize.reshape((N,C,H,W))
+
+    # Scale and shift - gamma and beta
+    out = gamma * x_normalize + beta
+
+    cache = (x, x_reshaped, mean, var, x_normalize, gamma, beta, eps, G)
 
     pass
 
@@ -865,6 +1052,46 @@ def spatial_groupnorm_backward(dout, cache):
     # This will be extremely similar to the layer norm implementation.        #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+
+    # Unpack the cache values
+    x, x_reshaped, mean, var, x_normalized, gamma, beta, eps, G = cache
+    N, C, H, W = dout.shape
+    
+    # Calculate gradients for beta and gamma
+    dbeta = np.sum(dout, axis=(0, 2, 3), keepdims=True)
+    dgamma = np.sum(dout * x_normalized, axis=(0, 2, 3), keepdims=True)
+    
+    # Calculate gradient with respect to the normalized inputs
+    dx_normalized = dout * gamma
+    
+    # Reshape dx_normalized to match the shape of x_reshaped in forward pass
+    dx_normalized_reshaped = dx_normalized.reshape(N, G, C//G, H, W)
+    
+    # Get dimensions for normalization calculation
+    D = (C//G) * H * W
+    
+    # Reshape x_normalized for group normalization calculations
+    x_normalized_reshaped = x_normalized.reshape(N, G, C//G, H, W)
+    
+    # Calculate gradient with respect to variance
+    dvar = np.sum(
+        dx_normalized_reshaped * (x_reshaped - mean) * -0.5 * (var + eps)**(-1.5),
+        axis=(2, 3, 4), keepdims=True
+    )
+    
+    # Calculate gradient with respect to mean
+    dmean = np.sum(
+        dx_normalized_reshaped * -1.0 / np.sqrt(var + eps),
+        axis=(2, 3, 4), keepdims=True
+    ) + dvar * np.sum(-2.0 * (x_reshaped - mean), axis=(2, 3, 4), keepdims=True) / D
+    
+    # Calculate gradient with respect to input x
+    dx_reshaped = dx_normalized_reshaped / np.sqrt(var + eps) + \
+                 dvar * 2.0 * (x_reshaped - mean) / D + \
+                 dmean / D
+    
+    # Reshape back to original dimensions
+    dx = dx_reshaped.reshape(N, C, H, W)
 
     pass
 

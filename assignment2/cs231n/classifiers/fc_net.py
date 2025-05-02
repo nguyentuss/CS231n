@@ -276,7 +276,7 @@ class FullyConnectedNet(object):
                 dx, dgamma, dbeta = layernorm_backward(dout, layernorm_cache)
                 dout = dx
                 gamma_name = f"gamma{layer}" 
-                beta_name = f"beta{layer}"
+                beta_name = f"beta{layer}"  
                 grads[gamma_name] = dgamma
                 grads[beta_name] = dbeta
             

@@ -63,6 +63,29 @@ class ThreeLayerConvNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+        #  C = input channel (e.g 3 is RGB channel)
+        #  H = Height image
+        #  W = Width image
+
+        C, H, W = input_dim
+        # W1 should have the size (num_filters, C, filter_size, filter_size)
+        self.params['W1'] = np.random.normal(loc=0, scale=weight_scale, size=(num_filters, C, filter_size, filter_size))
+        self.params['b1'] = np.zeros(num_filters)
+
+        # Calculate output size after convolution - width and height are preserved as mentioned in the comments
+        # Then calculate output size after pooling with 2x2 filter and stride 2
+        H_conv_out = H // 2  # Division by 2 due to pooling with stride 2
+        W_conv_out = W // 2  # Division by 2 due to pooling with stride 2
+
+        # Flatten the input to each neurons
+        conv_out = num_filters * H_conv_out * W_conv_out
+
+        self.params['W2'] = np.random.normal(loc=0, scale=weight_scale, size=(conv_out, hidden_dim))
+        self.params['b2'] = np.zeros(hidden_dim)
+
+        self.params['W3'] = np.random.normal(loc=0, scale=weight_scale, size=(hidden_dim, num_classes))
+        self.params['b3'] = np.zeros(num_classes)
+
         pass
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -91,6 +114,8 @@ class ThreeLayerConvNet(object):
         # pass pool_param to the forward pass for the max-pooling layer
         pool_param = {"pool_height": 2, "pool_width": 2, "stride": 2}
 
+        # print(X.shape)
+
         scores = None
         ############################################################################
         # TODO: Implement the forward pass for the three-layer convolutional net,  #
@@ -101,6 +126,21 @@ class ThreeLayerConvNet(object):
         # cs231n/layer_utils.py in your implementation (already imported).         #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+        # Forward pass for the three-layer conv net:
+        # conv - relu - 2x2 max pool - affine - relu - affine - softmax
+        
+        # First layer: conv - relu - 2x2 max pool
+        # Using the conv_relu_pool_forward helper function
+        conv_layer, conv_cache = conv_relu_pool_forward(X, W1, b1, conv_param, pool_param)
+        
+        # Second layer: affine - relu
+        # We need to reshape the output from the conv layer to feed into the affine layer
+        N, F, H_out, W_out = conv_layer.shape
+        conv_layer_flat = conv_layer.reshape(N, F * H_out * W_out)
+        hidden_layer, hidden_cache = affine_relu_forward(conv_layer_flat, W2, b2)
+        
+        # Third layer: affine (no activation, will be handled by softmax loss)
+        scores, scores_cache = affine_forward(hidden_layer, W3, b3)
 
         pass
 
@@ -124,6 +164,40 @@ class ThreeLayerConvNet(object):
         # of 0.5 to simplify the expression for the gradient.                      #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+        # Compute the loss by softmax
+        loss, dscores = softmax_loss(scores, y)
+
+        # Add L2 regularization
+        loss += 0.5 * self.reg * (np.sum(W1 * W1) + np.sum(W2 * W2) + np.sum(W3 * W3))
+
+        # Backpropagation
+
+        # Third layer: affine backward
+        dhidden, dW3, db3 = affine_backward(dscores, scores_cache)
+
+        # Add regularization
+        dW3 += self.reg * W3
+
+        # Second layer: affine_relu backward
+        dconv_flat, dW2, db2 = affine_relu_backward(dhidden, hidden_cache)
+
+        # Add regularization
+        dW2 += self.reg * W2
+
+        # Reshape gradient to match the conv layer output shape
+        N, F, H_out, W_out = conv_layer.shape
+        dconv = dconv_flat.reshape(N, F, H_out, W_out)
+
+        # First layer: conv_relu_maxpool backward
+        dx, dW1, db1 = conv_relu_pool_backward(dconv, conv_cache)
+        
+        dW1 += self.reg * W1
+
+        grads = {
+            'W1' : dW1, 'b1': db1,
+            'W2' : dW2, 'b2': db2,
+            'W3' : dW3, 'b3': db3
+        }
 
         pass
 
