@@ -1,7 +1,7 @@
 """This file defines layer types that are commonly used for recurrent neural networks.
 """
 import torch
-
+import torch.nn.functional as F
 
 def affine_forward(x, w, b):
     """Computes the forward pass for an affine (fully connected) layer.
@@ -43,7 +43,9 @@ def rnn_step_forward(x, prev_h, Wx, Wh, b):
     ##############################################################################
     # TODO: Implement a single forward step for the vanilla RNN.                 #
     ##############################################################################
-    # 
+
+    next_h = torch.tanh(x @ Wx + prev_h @ Wh + b) 
+
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -74,9 +76,22 @@ def rnn_forward(x, h0, Wx, Wh, b):
     # above. You can use a for loop to help compute the forward pass.            #
     ##############################################################################
     # 
+    N, T, D = x.shape
+    _, H = h0.shape
+
+    # Initialize
+    h = torch.zeros((N,T,H),dtype=x.dtype)
+    prev_h = h0
+
+    for t in range(T):
+        next_h = rnn_step_forward(x[:,t,:], prev_h, Wx, Wh, b)
+        h[:,t,:] = next_h
+        prev_h = next_h
+
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
+    
     return h
 
 
@@ -101,7 +116,15 @@ def word_embedding_forward(x, W):
     #                                                                            #
     # HINT: This can be done in one line using Pytorch's array indexing.         #
     ##############################################################################
-    # 
+    N, T = x.shape
+    V, D = W.shape
+
+    x = x.long()
+
+    indices = F.one_hot(x, num_classes=V).double()
+    # print(indices.shape)
+    out = indices @ W
+
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################

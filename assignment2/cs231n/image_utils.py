@@ -61,19 +61,53 @@ def image_from_url(url):
     """
     Read an image from a URL. Returns a numpy array with the pixel data.
     We write the image to a temporary file then read it back. Kinda gross.
+    Implements retry logic and handles permission errors.
     """
-    try:
-        f = urllib.request.urlopen(url)
-        _, fname = tempfile.mkstemp()
-        with open(fname, "wb") as ff:
-            ff.write(f.read())
-        img = imread(fname)
-        os.remove(fname)
-        return img
-    except urllib.error.URLError as e:
-        print("URL Error: ", e.reason, url)
-    except urllib.error.HTTPError as e:
-        print("HTTP Error: ", e.code, url)
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            f = urllib.request.urlopen(url)
+            # Create a unique temporary file for each attempt
+            temp_dir = tempfile.gettempdir()
+            temp_filename = f"img_download_{os.getpid()}_{attempt}_{np.random.randint(10000)}"
+            fname = os.path.join(temp_dir, temp_filename)
+            
+            # Write the image data to the temporary file
+            with open(fname, "wb") as ff:
+                ff.write(f.read())
+            
+            # Read the image
+            img = imread(fname)
+            
+            # Clean up
+            try:
+                os.remove(fname)
+            except Exception:
+                # If we can't remove it now, that's ok
+                pass
+                
+            return img
+            
+        except PermissionError:
+            if attempt < max_retries - 1:
+                print(f"Permission error on attempt {attempt+1}, retrying...")
+                import time
+                time.sleep(0.5)  # Wait a bit before retrying
+            else:
+                print(f"Failed to access file after {max_retries} attempts")
+                return None
+        except urllib.error.URLError as e:
+            print("URL Error: ", e.reason, url)
+            return None
+        except urllib.error.HTTPError as e:
+            print("HTTP Error: ", e.code, url)
+            return None
+        except Exception as e:
+            print(f"Error downloading image: {str(e)}")
+            if attempt < max_retries - 1:
+                print("Retrying...")
+            else:
+                return None
 
 
 def load_image(filename, size=None):

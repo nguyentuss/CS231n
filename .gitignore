@@ -1,0 +1,6 @@
+assignment2/cs231n/datasets/coco_captioning/*.h5
+assignment2/cs231n/datasets/coco_captioning/coco2014_vocab.json
+assignment2/cs231n/datasets/coco_captioning/train2014_images.txt
+assignment2/cs231n/datasets/coco_captioning/train2014_urls.txt
+assignment2/cs231n/datasets/coco_captioning/val2014_images.txt
+assignment2/cs231n/datasets/coco_captioning/val2014_urls.txt

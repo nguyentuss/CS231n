@@ -107,15 +107,23 @@ class CaptioningRNN:
         # Weight and bias for the affine transform from image features to initial
         # hidden state
         W_proj, b_proj = self.params["W_proj"], self.params["b_proj"]
+        W_proj = W_proj.double()
+        b_proj = b_proj.double()
 
         # Word embedding matrix
         W_embed = self.params["W_embed"]
+        W_embed = W_embed.double()
 
         # Input-to-hidden, hidden-to-hidden, and biases for the RNN
         Wx, Wh, b = self.params["Wx"], self.params["Wh"], self.params["b"]
+        Wx = Wx.double()
+        Wh = Wh.double()
+        b = b.double()
 
         # Weight and bias for the hidden-to-vocab transformation.
         W_vocab, b_vocab = self.params["W_vocab"], self.params["b_vocab"]
+        W_vocab = W_vocab.double()
+        b_vocab = b_vocab.double()
 
         loss = 0.0
         ############################################################################
@@ -139,6 +147,21 @@ class CaptioningRNN:
         # You also don't have to implement the backward pass.                      #
         ############################################################################
         # 
+        # Affine transformation
+        features = features.double()
+        h0 = affine_forward(features, W_proj, b_proj)
+      
+        # Word embedding layer forward
+        word_embeded = word_embedding_forward(captions_in, W_embed)
+
+        # Process the sequence of input word vectors
+        if self.cell_type == 'rnn':
+          out = rnn_forward(word_embeded, h0, Wx, Wh, b)
+        
+        temporal_out = temporal_affine_forward(out, W_vocab, b_vocab)
+
+        loss = temporal_softmax_loss(temporal_out, captions_out, mask, verbose = False)
+
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -174,9 +197,13 @@ class CaptioningRNN:
 
         # Unpack parameters
         W_proj, b_proj = self.params["W_proj"], self.params["b_proj"]
+        W_proj, b_proj = W_proj.double(), b_proj.double()
         W_embed = self.params["W_embed"]
+        W_embed = W_embed.double()
         Wx, Wh, b = self.params["Wx"], self.params["Wh"], self.params["b"]
+        Wx, Wh, b = Wx.double(), Wh.double(), b.double()
         W_vocab, b_vocab = self.params["W_vocab"], self.params["b_vocab"]
+        W_vocab, b_vocab = W_vocab.double(), b_vocab.double()
 
         ###########################################################################
         # TODO: Implement test-time sampling for the model. You will need to      #
@@ -203,6 +230,34 @@ class CaptioningRNN:
         # you are using an LSTM, initialize the first cell state to zeros.        #
         ###########################################################################
         # 
+        
+        _, V = W_vocab.shape
+        features = features.double()
+
+        # Initialize input with <START> token for all N images
+        x = torch.full((N, 1), self._start, dtype=torch.long)  # (N, 1)
+        
+        # Initilize the hidden state
+        h0 = affine_forward(features, W_proj, b_proj) # (N, H)
+        prev_h = h0
+        
+        for t in range(max_length):
+          # Generate the word embedding of the previous word
+          x_embed = word_embedding_forward(x, W_embed) # (N, 1, E)
+
+          # Compute next hidden state
+          if self.cell_type == 'rnn':
+            next_h = rnn_step_forward(x_embed[:, 0, :], prev_h, Wx, Wh, b) # (N, H)
+
+          # Update hidden state
+          prev_h = next_h
+
+          # Compute the affine_forward to get scores for all words
+          out = affine_forward(next_h, W_vocab, b_vocab) # (N, V)
+
+          x = torch.argmax(out, axis=1, keepdim=True).double() # (N , 1)
+          captions[:,t] = x[:, 0]
+
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
