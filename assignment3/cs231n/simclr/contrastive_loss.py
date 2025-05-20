@@ -54,12 +54,8 @@ def simclr_loss_naive(out_left, out_right, tau):
         #                                                                            #
         # Hint: Compute l(k, k+N) and l(k+N, k).                                     #
         ##############################################################################
-        # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-        pass
-
-        # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-         ##############################################################################
+        
+        ##############################################################################
         #                               END OF YOUR CODE                             #
         ##############################################################################
     
@@ -88,11 +84,6 @@ def sim_positive_pairs(out_left, out_right):
     # HINT: torch.linalg.norm might be helpful.                                  #
     ##############################################################################
     
-    # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    pass
-
-    # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     
     ##############################################################################
     #                               END OF YOUR CODE                             #
@@ -116,11 +107,7 @@ def compute_sim_matrix(out):
     # TODO: Start of your code.                                                  #
     ##############################################################################
     
-    # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
-
-    # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     
     ##############################################################################
     #                               END OF YOUR CODE                             #
@@ -162,27 +149,14 @@ def simclr_loss_vectorized(out_left, out_right, tau, device='cuda'):
     # You can do this in two ways: 
     # Option 1: Extract the corresponding indices from sim_matrix. 
     # Option 2: Use sim_positive_pairs().
-    # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    pass
-
-    # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    
     
     # Step 3: Compute the numerator value for all augmented samples.
     numerator = None
-    # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    pass
-
-    # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    
     
     # Step 4: Now that you have the numerator and denominator for all augmented samples, compute the total loss.
     loss = None
-    # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    pass
-
-    # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     
     ##############################################################################
     #                               END OF YOUR CODE                             #

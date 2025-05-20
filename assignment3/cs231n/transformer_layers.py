@@ -36,11 +36,7 @@ class PositionalEncoding(nn.Module):
         # this is what the autograder is expecting. For reference, our solution is #
         # less than 5 lines of code.                                               #
         ############################################################################
-        # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
-
-        # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -68,11 +64,7 @@ class PositionalEncoding(nn.Module):
         # appropriate ones to the input sequence. Don't forget to apply dropout    #
         # afterward. This should only take a few lines of code.                    #
         ############################################################################
-        # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
-
-        # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -163,14 +155,212 @@ class MultiHeadAttention(nn.Module):
         #     prevent a value from influencing output. Specifically, the PyTorch   #
         #     function masked_fill may come in handy.                              #
         ############################################################################
-        # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
-
-        # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
         return output
 
 
+class FeedForwardNetwork(nn.Module):
+    def __init__(self, embed_dim, ffn_dim, dropout=0.1):
+        """
+        Simple two-layer feed-forward network with dropout and ReLU activation.
+
+        Inputs:
+         - embed_dim: Dimension of input and output embeddings
+         - ffn_dim: Hidden dimension in the feedforward network
+         - dropout: Dropout probability
+        """
+        super().__init__()
+        self.fc1 = nn.Linear(embed_dim, ffn_dim)
+        self.gelu = nn.GELU()
+        self.dropout = nn.Dropout(dropout)
+        self.fc2 = nn.Linear(ffn_dim, embed_dim)
+
+    def forward(self, x):
+        """
+        Forward pass for the feedforward network.
+
+        Inputs:
+        - x: Input tensor of shape (N, T, D)
+
+        Returns:
+        - out: Output tensor of the same shape as input
+        """
+        out = torch.empty_like(x)
+
+        out = self.fc1(x)
+        out = self.gelu(out)
+        out = self.dropout(out)
+        out = self.fc2(out)
+
+        return out
+
+
+class TransformerDecoderLayer(nn.Module):
+    """
+    A single layer of a Transformer decoder, to be used with TransformerDecoder.
+    """
+    def __init__(self, input_dim, num_heads, dim_feedforward=2048, dropout=0.1):
+        """
+        Construct a TransformerDecoderLayer instance.
+
+        Inputs:
+         - input_dim: Number of expected features in the input.
+         - num_heads: Number of attention heads
+         - dim_feedforward: Dimension of the feedforward network model.
+         - dropout: The dropout value.
+        """
+        super().__init__()
+        self.self_attn = MultiHeadAttention(input_dim, num_heads, dropout)
+        self.cross_attn = MultiHeadAttention(input_dim, num_heads, dropout)
+        self.ffn = FeedForwardNetwork(input_dim, dim_feedforward, dropout)
+
+        self.norm_self = nn.LayerNorm(input_dim)
+        self.norm_cross = nn.LayerNorm(input_dim)
+        self.norm_ffn = nn.LayerNorm(input_dim)
+
+        self.dropout_self = nn.Dropout(dropout)
+        self.dropout_cross = nn.Dropout(dropout)
+        self.dropout_ffn = nn.Dropout(dropout)
+
+
+    def forward(self, tgt, memory, tgt_mask=None):
+        """
+        Pass the inputs (and mask) through the decoder layer.
+
+        Inputs:
+        - tgt: the sequence to the decoder layer, of shape (N, T, D)
+        - memory: the sequence from the last layer of the encoder, of shape (N, S, D)
+        - tgt_mask: the parts of the target sequence to mask, of shape (T, T)
+
+        Returns:
+        - out: the Transformer features, of shape (N, T, W)
+        """
+
+        # Self-attention block (reference implementation)
+        shortcut = tgt
+        tgt = self.self_attn(query=tgt, key=tgt, value=tgt, attn_mask=tgt_mask)
+        tgt = self.dropout_self(tgt)
+        tgt = tgt + shortcut
+        tgt = self.norm_self(tgt)
+
+        ############################################################################
+        # TODO: Complete the decoder layer by implementing the remaining two       #
+        # sublayers: (1) the cross-attention block using the encoder output as     #
+        # memory, and (2) the feedforward block. Each block should follow the      #
+        # same structure as self-attention implemented just above.                 #
+        ############################################################################
+
+        ############################################################################
+        #                             END OF YOUR CODE                             #
+        ############################################################################
+
+        return tgt
+
+
+class PatchEmbedding(nn.Module):
+    """
+    A layer that splits an image into patches and projects each patch to an embedding vector.
+    Used as the input layer of a Vision Transformer (ViT).
+
+    Inputs:
+    - img_size: Integer representing the height/width of input image (assumes square image).
+    - patch_size: Integer representing height/width of each patch (square patch).
+    - in_channels: Number of input image channels (e.g., 3 for RGB).
+    - embed_dim: Dimension of the linear embedding space.
+    """
+    def __init__(self, img_size, patch_size, in_channels=3, embed_dim=128):
+        super().__init__()
+
+        self.img_size = img_size
+        self.patch_size = patch_size
+        self.in_channels = in_channels
+        self.embed_dim = embed_dim
+
+        assert img_size % patch_size == 0, "Image dimensions must be divisible by the patch size."
+
+        self.num_patches = (img_size // patch_size) ** 2
+        self.patch_dim = patch_size * patch_size * in_channels
+
+        # Linear projection of flattened patches to the embedding dimension
+        self.proj = nn.Linear(self.patch_dim, embed_dim)
+
+
+    def forward(self, x):
+        """
+        Forward pass for patch embedding.
+
+        Inputs:
+        - x: Input image tensor of shape (N, C, H, W)
+
+        Returns:
+        - out: Patch embeddings with positional encodings of shape (N, num_patches, embed_dim)
+        """
+        N, C, H, W = x.shape
+        assert H == self.img_size and W == self.img_size, \
+            f"Expected image size ({self.img_size}, {self.img_size}), but got ({H}, {W})"
+        out = torch.zeros(N, self.embed_dim)
+
+        ############################################################################
+        # TODO: Divide the image into non-overlapping patches of shape             #
+        # (patch_size x patch_size x C), and rearrange them into a tensor of       #
+        # shape (N, num_patches, patch_dim). Do not use a for-loop.                #
+        # Instead, you may find torch.reshape and torch.permute helpful for this   #
+        # step. Once the patches are flattened, embed them into latent vectors     #
+        # using the projection layer.                                              #
+        ############################################################################
+
+        ############################################################################
+        #                             END OF YOUR CODE                             #
+        ############################################################################
+        return out
+
+
+
+
+class TransformerEncoderLayer(nn.Module):
+    """
+    A single layer of a Transformer encoder, to be used with TransformerEncoder.
+    """
+    def __init__(self, input_dim, num_heads, dim_feedforward=2048, dropout=0.1):
+        """
+        Construct a TransformerEncoderLayer instance.
+
+        Inputs:
+         - input_dim: Number of expected features in the input.
+         - num_heads: Number of attention heads.
+         - dim_feedforward: Dimension of the feedforward network model.
+         - dropout: The dropout value.
+        """
+        super().__init__()
+        self.self_attn = MultiHeadAttention(input_dim, num_heads, dropout)
+        self.ffn = FeedForwardNetwork(input_dim, dim_feedforward, dropout)
+
+        self.norm_self = nn.LayerNorm(input_dim)
+        self.norm_ffn = nn.LayerNorm(input_dim)
+
+        self.dropout_self = nn.Dropout(dropout)
+        self.dropout_ffn = nn.Dropout(dropout)
+
+    def forward(self, src, src_mask=None):
+        """
+        Pass the inputs (and mask) through the encoder layer.
+
+        Inputs:
+        - src: the sequence to the encoder layer, of shape (N, S, D)
+        - src_mask: the parts of the source sequence to mask, of shape (S, S)
+
+        Returns:
+        - out: the Transformer features, of shape (N, S, D)
+        """
+        ############################################################################
+        # TODO: Implement the encoder layer by applying self-attention followed    #
+        # by a feedforward block. This code will be very similar to decoder layer. #
+        ############################################################################
+
+        ############################################################################
+        #                             END OF YOUR CODE                             #
+        ############################################################################
+        return src

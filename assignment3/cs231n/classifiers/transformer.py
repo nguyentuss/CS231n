@@ -88,11 +88,7 @@ class CaptioningTransformer(nn.Module):
         #  3) Finally, apply the decoder features on the text & image embeddings   #
         #     along with the tgt_mask. Project the output to scores per token      #
         ############################################################################
-        # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
-
-        # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -141,70 +137,10 @@ class CaptioningTransformer(nn.Module):
             return captions
 
 
-class TransformerDecoderLayer(nn.Module):
-    """
-    A single layer of a Transformer decoder, to be used with TransformerDecoder.
-    """
-    def __init__(self, input_dim, num_heads, dim_feedforward=2048, dropout=0.1):
-        """
-        Construct a TransformerDecoderLayer instance.
-
-        Inputs:
-         - input_dim: Number of expected features in the input.
-         - num_heads: Number of attention heads
-         - dim_feedforward: Dimension of the feedforward network model.
-         - dropout: The dropout value.
-        """
-        super().__init__()
-        self.self_attn = MultiHeadAttention(input_dim, num_heads, dropout)
-        self.multihead_attn = MultiHeadAttention(input_dim, num_heads, dropout)
-        self.linear1 = nn.Linear(input_dim, dim_feedforward)
-        self.dropout = nn.Dropout(dropout)
-        self.linear2 = nn.Linear(dim_feedforward, input_dim)
-
-        self.norm1 = nn.LayerNorm(input_dim)
-        self.norm2 = nn.LayerNorm(input_dim)
-        self.norm3 = nn.LayerNorm(input_dim)
-        self.dropout1 = nn.Dropout(dropout)
-        self.dropout2 = nn.Dropout(dropout)
-        self.dropout3 = nn.Dropout(dropout)
-
-        self.activation = nn.ReLU()
-
-
-    def forward(self, tgt, memory, tgt_mask=None):
-        """
-        Pass the inputs (and mask) through the decoder layer.
-
-        Inputs:
-        - tgt: the sequence to the decoder layer, of shape (N, T, W)
-        - memory: the sequence from the last layer of the encoder, of shape (N, S, D)
-        - tgt_mask: the parts of the target sequence to mask, of shape (T, T)
-
-        Returns:
-        - out: the Transformer features, of shape (N, T, W)
-        """
-        # Perform self-attention on the target sequence (along with dropout and
-        # layer norm).
-        tgt2 = self.self_attn(query=tgt, key=tgt, value=tgt, attn_mask=tgt_mask)
-        tgt = tgt + self.dropout1(tgt2)
-        tgt = self.norm1(tgt)
-
-        # Attend to both the target sequence and the sequence from the last
-        # encoder layer.
-        tgt2 = self.multihead_attn(query=tgt, key=memory, value=memory)
-        tgt = tgt + self.dropout2(tgt2)
-        tgt = self.norm2(tgt)
-
-        # Pass
-        tgt2 = self.linear2(self.dropout(self.activation(self.linear1(tgt))))
-        tgt = tgt + self.dropout3(tgt2)
-        tgt = self.norm3(tgt)
-        return tgt
-
 def clones(module, N):
     "Produce N identical layers."
     return nn.ModuleList([copy.deepcopy(module) for _ in range(N)])
+
 
 class TransformerDecoder(nn.Module):
     def __init__(self, decoder_layer, num_layers):
@@ -219,3 +155,95 @@ class TransformerDecoder(nn.Module):
             output = mod(output, memory, tgt_mask=tgt_mask)
 
         return output
+
+
+class TransformerEncoder(nn.Module):
+    def __init__(self, encoder_layer, num_layers):
+        super().__init__()
+        self.layers = clones(encoder_layer, num_layers)
+        self.num_layers = num_layers
+
+    def forward(self, src, src_mask=None):
+        output = src
+
+        for mod in self.layers:
+            output = mod(output, src_mask=src_mask)
+
+        return output
+
+
+
+class VisionTransformer(nn.Module):
+    """
+    Vision Transformer (ViT) implementation.
+    """
+    def __init__(self, img_size=32, patch_size=8, in_channels=3,
+                 embed_dim=128, num_layers=6, num_heads=4,
+                 dim_feedforward=256, num_classes=10, dropout=0.1):
+        """
+        Inputs:
+         - img_size: Size of input image (assumed square).
+         - patch_size: Size of each patch (assumed square).
+         - in_channels: Number of image channels.
+         - embed_dim: Embedding dimension for each patch.
+         - num_layers: Number of Transformer encoder layers.
+         - num_heads: Number of attention heads.
+         - dim_feedforward: Hidden size of feedforward network.
+         - num_classes: Number of classification labels.
+         - dropout: Dropout probability.
+        """
+        super().__init__()
+        self.num_classes = num_classes
+        self.patch_embed = PatchEmbedding(img_size, patch_size, in_channels, embed_dim)
+        self.positional_encoding = PositionalEncoding(embed_dim, dropout=dropout)
+
+        encoder_layer = TransformerEncoderLayer(embed_dim, num_heads, dim_feedforward, dropout)
+        self.transformer = TransformerEncoder(encoder_layer, num_layers=num_layers)
+
+        # Final classification layer to predict class scores from pooled token.
+        self.head = nn.Linear(embed_dim, num_classes)
+
+        self.apply(self._init_weights)
+
+
+    def _init_weights(self, module):
+        """
+        Initialize the weights of the network.
+        """
+        if isinstance(module, (nn.Linear, nn.Embedding)):
+            module.weight.data.normal_(mean=0.0, std=0.02)
+            if isinstance(module, nn.Linear) and module.bias is not None:
+                module.bias.data.zero_()
+        elif isinstance(module, nn.LayerNorm):
+            module.bias.data.zero_()
+            module.weight.data.fill_(1.0)
+
+    def forward(self, x):
+        """
+        Forward pass of Vision Transformer.
+
+        Inputs:
+         - x: Input image tensor of shape (N, C, H, W)
+
+        Returns:
+         - logits: Output classification logits of shape (N, num_classes)
+        """
+        N = x.size(0)
+        logits = torch.zeros(N, self.num_classes, device=x.device)
+        
+        ############################################################################
+        # TODO: Implement the forward pass of the Vision Transformer.             #
+        # 1. Convert the input image into a sequence of patch vectors.            #
+        # 2. Add positional encodings to retain spatial information.              #
+        # 3. Pass the sequence through the Transformer encoder.                   #
+        # 4. Average pool patch vectors to get a feature vector for each image.   #
+        #    You may find torch.mean useful.                                      #
+        # 5. Feed it through a linear layer to produce class logits.              #
+        ############################################################################
+
+        ############################################################################
+        #                             END OF YOUR CODE                             #
+        ############################################################################
+
+
+        return logits
