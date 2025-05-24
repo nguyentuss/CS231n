@@ -44,7 +44,7 @@ class ClassificationSolverViT:
         self.batch_size = kwargs.pop("batch_size", 64)
         self.num_epochs = kwargs.pop("num_epochs", 2)
 
-        self.optimizer = torch.optim.Adam(self.model.parameters(), self.learning_rate, weight_decay=self.weight_decay)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), self.learning_rate,betas=(0.9, 0.999), weight_decay=self.weight_decay)
         self.loss_criterion = torch.nn.CrossEntropyLoss()
 
         self._reset()

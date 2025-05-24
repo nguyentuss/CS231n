@@ -88,6 +88,21 @@ class CaptioningTransformer(nn.Module):
         #  3) Finally, apply the decoder features on the text & image embeddings   #
         #     along with the tgt_mask. Project the output to scores per token      #
         ############################################################################
+        
+        # Project the features
+        features_proj = self.visual_projection(features).unsqueeze(1) # (N, 1, W)
+
+        # Embedding captions
+        captions = self.embedding(captions) # (N, T, E)
+
+        # Add positional
+        captions = self.positional_encoding(captions) # (N, T, E)
+
+        tgt_mask = torch.tril(torch.ones(T, T, dtype=torch.bool)) 
+    
+        transformer = self.transformer(tgt=captions, memory=features_proj, tgt_mask=tgt_mask)
+
+        scores = self.output(transformer)
 
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -171,8 +186,6 @@ class TransformerEncoder(nn.Module):
 
         return output
 
-
-
 class VisionTransformer(nn.Module):
     """
     Vision Transformer (ViT) implementation.
@@ -240,6 +253,22 @@ class VisionTransformer(nn.Module):
         #    You may find torch.mean useful.                                      #
         # 5. Feed it through a linear layer to produce class logits.              #
         ############################################################################
+        
+        # Linear projection of flattened patches
+        patches = self.patch_embed(x) # (N, num_patch, embed_dim)
+
+
+        # Position encoding
+        patches = self.positional_encoding(patches) # (N, num_patch, embed_dim)
+
+        # Pass the encoder
+        encode = self.transformer(patches) # (N, num_patch, embed_dim)
+
+        # Average pool
+        mean = torch.mean(encode, dim = 1) #(N, embed_dim)
+
+        # Linear layer
+        logits = self.head(mean)
 
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -247,3 +276,95 @@ class VisionTransformer(nn.Module):
 
 
         return logits
+
+
+def validate_vision_transformer():
+    """
+    Validates the VisionTransformer implementation with a structured test input.
+    """
+    # Set deterministic seed for reproducibility
+    torch.manual_seed(42)
+    
+    # Create simple configuration for testing
+    img_size = 16
+    patch_size = 8
+    in_channels = 3
+    embed_dim = 16
+    num_layers = 2
+    num_heads = 2
+    num_classes = 10
+    
+    # Create the model with simplified architecture
+    model = VisionTransformer(
+        img_size=img_size,
+        patch_size=patch_size,
+        in_channels=in_channels,
+        embed_dim=embed_dim,
+        num_layers=num_layers,
+        num_heads=num_heads,
+        dim_feedforward=32,
+        num_classes=num_classes,
+        dropout=0.0  # No dropout for deterministic results
+    )
+    
+    # Initialize weights deterministically 
+    def init_weights(module):
+        if isinstance(module, nn.Linear):
+            # Use small constant weights for predictable output
+            with torch.no_grad():
+                module.weight.fill_(0.01)
+                if module.bias is not None:
+                    module.bias.fill_(0)
+    
+    model.apply(init_weights)
+    
+    # Create a test input: an image with a simple pattern
+    # Each channel has increasing values
+    x = torch.zeros(2, in_channels, img_size, img_size)
+    for c in range(in_channels):
+        x[:, c, :, :] = c + 1  # Channel 0=1, Channel 1=2, Channel 2=3
+    
+    # Track the transformed dimensions through the forward pass
+    print(f"Input shape: {x.shape}")
+    
+    # Extract patches
+    patches = model.patch_embed(x)
+    print(f"After patch embedding: {patches.shape}")
+    
+    # Add positional encoding
+    patches_with_pos = model.positional_encoding(patches)
+    print(f"After positional encoding: {patches_with_pos.shape}")
+    
+    # Pass through transformer
+    encoded = model.transformer(patches_with_pos)
+    print(f"After transformer encoder: {encoded.shape}")
+    
+    # Average pool
+    pooled = torch.mean(encoded, dim=1)
+    print(f"After pooling: {pooled.shape}")
+    
+    # Final classification
+    logits = model(x)
+    print(f"Final logits shape: {logits.shape}")
+    print(f"Sample logits values: {logits[0, :3]}")
+    
+    # Since we used constant small weights, the logits should have small values
+    is_reasonable = torch.all(torch.abs(logits) < 1.0)
+    print(f"Logits have reasonable values: {is_reasonable}")
+    
+    # Verify same shape as expected
+    expected_shape = (2, num_classes)
+    shape_correct = logits.shape == expected_shape
+    print(f"Output shape is correct: {shape_correct}")
+    
+    # Verify forward pass doesn't crash and returns consistent results
+    logits2 = model(x)
+    consistency = torch.allclose(logits, logits2)
+    print(f"Forward pass is consistent: {consistency}")
+    
+    return {
+        "shape_correct": shape_correct,
+        "values_reasonable": is_reasonable,
+        "consistent": consistency,
+        "overall_valid": shape_correct and is_reasonable and consistency
+    }

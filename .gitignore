@@ -12,3 +12,7 @@ assignment3/cs231n/datasets/coco_captioning/train2014_images.txt
 assignment3/cs231n/datasets/coco_captioning/train2014_urls.txt
 assignment3/cs231n/datasets/coco_captioning/val2014_images.txt
 assignment3/cs231n/datasets/coco_captioning/val2014_urls.txt
+assignment3/cs231n/__pycache__/*
+assignment3/data/*
+assignment3/cs231n/classifiers/*
+assignment3/__pycache__

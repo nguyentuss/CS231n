@@ -36,6 +36,11 @@ class PositionalEncoding(nn.Module):
         # this is what the autograder is expecting. For reference, our solution is #
         # less than 5 lines of code.                                               #
         ############################################################################
+        i = torch.arange(max_len)[:,None]
+        pow = torch.pow(10000,-torch.arange(0, embed_dim, step=2)/embed_dim)
+        
+        pe[0, :, 0::2] = torch.sin(i * pow)
+        pe[0, :, 1::2] = torch.cos(i * pow) 
 
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -64,6 +69,9 @@ class PositionalEncoding(nn.Module):
         # appropriate ones to the input sequence. Don't forget to apply dropout    #
         # afterward. This should only take a few lines of code.                    #
         ############################################################################
+
+        output = x + self.pe[:, :S]
+        output = self.dropout(output)
 
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -110,7 +118,7 @@ class MultiHeadAttention(nn.Module):
         self.value = nn.Linear(embed_dim, embed_dim)
         self.proj = nn.Linear(embed_dim, embed_dim)
         
-        self.attn_drop = nn.Dropout(dropout)
+        self.attn_drop = nn.Dropout(p=dropout)
 
         self.n_head = num_heads
         self.emd_dim = embed_dim
@@ -139,6 +147,7 @@ class MultiHeadAttention(nn.Module):
         """
         N, S, E = query.shape
         N, T, E = value.shape
+        H = self.n_head
         # Create a placeholder, to be overwritten by your code below.
         output = torch.empty((N, S, E))
         ############################################################################
@@ -155,6 +164,49 @@ class MultiHeadAttention(nn.Module):
         #     prevent a value from influencing output. Specifically, the PyTorch   #
         #     function masked_fill may come in handy.                              #
         ############################################################################
+
+        # Apply linear projection
+        query = self.query(query) # (N, S, E)
+        key = self.key(key) # (N, T, E)
+        value = self.value(value) # (N, T, E)
+        # Dimension
+        d_k = E // H
+
+        # Split the input due to the parallel attention layers
+        # view is the take but no copy (allocate to the original memory)
+        query = query.view(N, S, H, d_k).transpose(1, 2) # (N, H, S, d_k)
+        key = key.view(N, T, H, d_k).transpose(1, 2) # (N, H, T, d_k)
+        value = value.view(N, T, H, d_k).transpose(1, 2) # (N, H, T, d_k)
+        
+
+        # Compute the scaled dot-product attention
+        # MatMul (Q @ K^T) / sqrt(d_k)
+        scores = query @ key.transpose(-2, -1) / math.sqrt(d_k) # (N, H, S, T)
+
+        if attn_mask is not None:
+            attn_mask = attn_mask == 0
+
+            # Reshape (1, 1, T, T)
+            attn_mask = attn_mask.view(1, 1, S, T)
+
+            # Applied mask
+            scores = scores.masked_fill(attn_mask, float('-inf'))
+        
+        # Apply softmax for the last dimension
+        attn_weights = F.softmax(scores, dim=-1) # (N, H, S, T) 
+
+        # Apply dropout
+        attn_weights = self.attn_drop(attn_weights)
+
+        # Matmul (attn_weight @ V)
+        out = torch.matmul(attn_weights, value) # (N, H, S, d_k)
+
+        # Concat
+        output = out.transpose(1, 2).contiguous().view(N, S, E)
+
+
+        # Apply Linear projection
+        output = self.proj(output)
 
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -253,6 +305,34 @@ class TransformerDecoderLayer(nn.Module):
         # same structure as self-attention implemented just above.                 #
         ############################################################################
 
+        # Block 2
+        # Create the shortcut
+        shortcut = tgt
+        tgt = self.cross_attn(query=tgt, key=memory, value=memory)
+        
+        # dropout
+        tgt = self.dropout_cross(tgt)
+
+        # Add
+        tgt = tgt + shortcut
+
+        # Norm
+        tgt = self.norm_cross(tgt)
+
+        # Block 3 
+        # Create the shortcut
+        shortcut = tgt
+        tgt = self.ffn(tgt)
+
+        # dropout
+        tgt = self.dropout_ffn(tgt)
+        
+        # Add
+        tgt = tgt + shortcut
+        
+        # Norm
+        tgt = self.norm_ffn(tgt)
+
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -301,7 +381,7 @@ class PatchEmbedding(nn.Module):
         N, C, H, W = x.shape
         assert H == self.img_size and W == self.img_size, \
             f"Expected image size ({self.img_size}, {self.img_size}), but got ({H}, {W})"
-        out = torch.zeros(N, self.embed_dim)
+        out = torch.zeros(N, self.num_patches, self.embed_dim)
 
         ############################################################################
         # TODO: Divide the image into non-overlapping patches of shape             #
@@ -311,12 +391,24 @@ class PatchEmbedding(nn.Module):
         # step. Once the patches are flattened, embed them into latent vectors     #
         # using the projection layer.                                              #
         ############################################################################
+        
+        # Extract patches using unfold in raster scan order
+        patches = x.unfold(2, self.patch_size, self.patch_size).unfold(3, self.patch_size, self.patch_size)
+        # Shape: (N, C, num_patches_h, num_patches_w, patch_size, patch_size)
+
+        # Permute to group patches: (N, num_patches_h, num_patches_w, C, patch_size, patch_size)
+        patches = patches.permute(0, 2, 3, 1, 4, 5).contiguous()
+
+        # Flatten patches: (N, num_patches, C * patch_size * patch_size)
+        patches = patches.view(N, self.num_patches, self.patch_dim)
+
+        # Project to embedding dimension
+        out = self.proj(patches)
 
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
         return out
-
 
 
 
@@ -360,7 +452,87 @@ class TransformerEncoderLayer(nn.Module):
         # by a feedforward block. This code will be very similar to decoder layer. #
         ############################################################################
 
+        
+        # Block 1
+        # Create the shortcut
+        shortcut = src
+        src = self.self_attn(query=src, key=src, value=src, attn_mask=src_mask)
+        
+        # dropout
+        src = self.dropout_self(src)
+
+        # Add
+        src = src + shortcut
+
+        # Norm
+        src = self.norm_self(src)
+
+        # Block 2
+        # Create the shortcut
+        shortcut = src
+        src = self.ffn(src)
+
+        # dropout
+        src = self.dropout_ffn(src)
+        
+        # Add
+        src = src + shortcut
+        
+        # Norm
+        src = self.norm_ffn(src)
+
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
         return src
+
+def validate_patch_embedding():
+    """
+    Validates the PatchEmbedding implementation with a structured input pattern.
+    Returns True if the implementation is correct, False otherwise.
+    """
+    # Create a deterministic test case
+    torch.manual_seed(42)
+    
+    # Simple case: 2×2 grid of patches from an 8×8 image
+    img_size = 8
+    patch_size = 4
+    in_channels = 3
+    embed_dim = 16
+    
+    # Create patch embedding with controlled weights
+    patch_embed = PatchEmbedding(img_size, patch_size, in_channels, embed_dim)
+    
+    # Initialize weights deterministically for reproducible results
+    with torch.no_grad():
+        patch_embed.proj.weight.fill_(0.1)
+        patch_embed.proj.bias.fill_(0.5)
+    
+    # Create an input with a clear pattern: each channel has a different constant value
+    x = torch.zeros(2, in_channels, img_size, img_size)
+    for c in range(in_channels):
+        x[:, c, :, :] = c + 1  # Channel 0=1, Channel 1=2, Channel 2=3
+    
+    # Process through patch embedding
+    output = patch_embed(x)
+    
+    # Compute expected output manually:
+    # Each patch contains 4×4×3 = 48 values
+    # For the first patch: 16 ones, 16 twos, and 16 threes
+    # Each embedding dimension gets: 0.1*(16*1 + 16*2 + 16*3) + 0.5 = 0.1*96 + 0.5 = 10.1
+    expected_patch_sum = (1 + 2 + 3) * (patch_size ** 2)  # 16*(1+2+3) = 16*6 = 96
+    expected_embed_val = 0.1 * expected_patch_sum + 0.5   # 0.1*96 + 0.5 = 10.1
+    expected_output = torch.full((2, (img_size // patch_size) ** 2, embed_dim), expected_embed_val)
+    
+    # Check if output matches expected
+    match = torch.allclose(output, expected_output, rtol=1e-4)
+    
+    # Print helpful diagnostic info
+    print(f"Input shape: {x.shape}")
+    print(f"Output shape: {output.shape}")
+    print(f"Expected shape: {expected_output.shape}")
+    print(f"Expected value per embedding: {expected_embed_val}")
+    print(f"Actual sample values: {output[0, 0, :5]}")  # First 5 values of first patch
+    print(f"Implementation {'correct' if match else 'incorrect'}")
+    
+    return match
